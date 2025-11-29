@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>拼字學習機 (V3.2 手機修復版)</title>
+    <title>拼字學習機 (V3.3 穩定修復版)</title>
     
     <style>
         :root {
@@ -14,14 +14,23 @@
             --vowel: #E53935; --consonant: #1565C0; --success: #66BB6A; --error: #EF5350;
         }
         
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+        /* 基礎設定：移除全域禁止選取，避免鎖死輸入框 */
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
         body {
-            font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+            font-family: 'Comic Sans MS', 'Chalkboard SE', '微軟正黑體', sans-serif;
             background-color: var(--bg); color: var(--text); margin: 0; padding: 0;
             display: flex; flex-direction: column; align-items: center; min-height: 100vh;
-            /* 防止手機下拉重整干擾遊戲 */
-            overscroll-behavior: none;
+            /* 防止手機過度滑動 */
+            overscroll-behavior-y: none;
+        }
+
+        /* 禁止選取的工具類別 (只用在按鈕和標籤，不影響輸入框) */
+        .noselect {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
         }
 
         /* Header */
@@ -50,7 +59,7 @@
         }
 
         /* Elements */
-        .big-word { font-size: 3rem; font-weight: bold; margin: 15px 0; letter-spacing: 1px; line-height: 1.2; word-break: break-word; user-select: text; }
+        .big-word { font-size: 3rem; font-weight: bold; margin: 15px 0; letter-spacing: 1px; line-height: 1.2; word-break: break-word; }
         .vowel { color: var(--vowel); } .consonant { color: var(--consonant); }
         .syllable-display { font-size: 1.5rem; color: #90A4AE; margin-bottom: 5px; height: 30px; font-family: monospace; }
         
@@ -61,29 +70,39 @@
         
         .scramble-area { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
         
-        /* 手機按鈕優化 */
+        /* 按鈕樣式 (關鍵修復) */
         .block-btn { 
             width: 50px; height: 50px; 
             background: var(--primary); 
             border: none; border-radius: 12px; 
             font-size: 1.6rem; font-weight: bold; 
             box-shadow: 0 4px 0 var(--primary-dark);
-            /* 關鍵：讓手機知道這是可點擊區域 */
-            touch-action: manipulation; 
             cursor: pointer;
-            position: relative;
+            /* 這是讓手機版點擊順暢的關鍵 CSS，不需要改 JS */
+            touch-action: manipulation; 
+            transition: transform 0.1s, opacity 0.2s;
         }
         .block-btn:active { transform: translateY(4px); box-shadow: none; }
-        .block-btn.used { opacity: 0; pointer-events: none; } /* 使用過的狀態 */
+        .block-btn:disabled { 
+            opacity: 0; /* 視覺隱藏但佔位 */
+            pointer-events: none; /* 禁止再次點擊 */
+            cursor: default;
+        }
         
-        .input-box { font-size: 1.8rem; padding: 10px; width: 90%; text-align: center; border: 3px solid var(--secondary); border-radius: 15px; outline: none; margin: 20px 0; background: #FAFAFA; user-select: text;}
+        /* 輸入框必須允許選取 (user-select: text) */
+        .input-box { 
+            font-size: 1.8rem; padding: 10px; width: 90%; text-align: center; 
+            border: 3px solid var(--secondary); border-radius: 15px; outline: none; 
+            margin: 20px 0; background: #FAFAFA; 
+            -webkit-user-select: text; user-select: text; 
+        }
         .input-box:focus { border-color: var(--secondary-dark); background: #FFF; }
         
         .chinese { font-size: 1.5rem; margin-top: 5px; color: #546E7A; font-weight: bold; }
         .sentence { font-style: italic; color: #78909C; margin-top: 15px; font-size: 1rem; background: #ECEFF1; padding: 8px 15px; border-radius: 15px; display: inline-block; }
         
         .nav-controls { display: flex; justify-content: space-around; align-items: center; width: 100%; margin-top: auto; padding-top: 25px; }
-        .action-btn { background: var(--accent); color: white; border: none; padding: 12px 24px; border-radius: 50px; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 0 #D84315; font-weight: bold; touch-action: manipulation; }
+        .action-btn { background: var(--accent); color: white; border: none; padding: 10px 24px; border-radius: 50px; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 0 #D84315; font-weight: bold; touch-action: manipulation; }
         .action-btn:active { transform: translateY(4px); box-shadow: none; }
         .speak-btn { width: 60px; height: 60px; border-radius: 50%; font-size: 26px; background: var(--secondary); box-shadow: 0 5px 0 #0288D1; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; color: white; touch-action: manipulation; }
         .speak-btn:active { transform: translateY(4px); box-shadow: none; }
@@ -94,7 +113,7 @@
         /* Settings Modal */
         #settings-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
         .modal-content { background: white; width: 90%; max-width: 500px; padding: 20px; border-radius: 15px; max-height: 85vh; overflow-y: auto; text-align: left; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-        textarea { width: 100%; height: 250px; border: 2px solid #eee; padding: 10px; font-family: monospace; font-size: 0.9rem; border-radius: 8px; resize: vertical; user-select: text; }
+        textarea { width: 100%; height: 250px; border: 2px solid #eee; padding: 10px; font-family: monospace; font-size: 0.9rem; border-radius: 8px; resize: vertical; -webkit-user-select: text; user-select: text; }
         .modal-actions { text-align: right; margin-top: 15px; display: flex; justify-content: flex-end; gap: 10px; }
         
         @keyframes shake { 0%, 100% {transform: translateX(0);} 25% {transform: translateX(-5px);} 75% {transform: translateX(5px);} }
@@ -107,18 +126,18 @@
 </head>
 <body>
 
-<header>
+<header class="noselect">
     <div style="width:30px"></div>
     <div class="header-title">🐝 Spelling Bee</div>
     <button class="setting-btn" onclick="openSettings()">⚙️</button>
 </header>
 
-<div class="controls-row">
+<div class="controls-row noselect">
     <select id="levelSelect" onchange="changeLevel()"></select>
     <select id="voiceSelect" onchange="setVoice()"><option>Loading...</option></select>
 </div>
 
-<div class="tabs">
+<div class="tabs noselect">
     <button class="tab-btn active" onclick="switchMode('study')" id="tab-study">👀 學習</button>
     <button class="tab-btn" onclick="switchMode('block')" id="tab-block">🧩 拼圖</button>
     <button class="tab-btn" onclick="switchMode('dictation')" id="tab-dictation">✍️ 聽寫</button>
@@ -141,7 +160,7 @@
 
 <script>
     // ==========================================
-    // 1. 預設資料
+    // 1. 預設資料 (Attach set)
     // ==========================================
     const defaultDataRaw = `
 attach=at-tach=附上；貼上=Please attach the photo to the email.
@@ -187,9 +206,8 @@ advice=ad-vice=建議=My teacher gave me good advice.
     let currentVoice = null;
     let isSyllableShown = false;
     const synth = window.speechSynthesis;
-    const STORAGE_KEY = 'spelling_bee_v3_2_data'; // V3.2 Key
+    const STORAGE_KEY = 'spelling_bee_v3_3_stable'; // 新的 Key
 
-    // 啟動
     window.onload = function() {
         loadData();
         initVoices();
@@ -243,7 +261,7 @@ advice=ad-vice=建議=My teacher gave me good advice.
         }
     }
 
-    // Game Logic
+    // Levels
     function initLevels() {
         const select = document.getElementById('levelSelect');
         select.innerHTML = '';
@@ -280,10 +298,10 @@ advice=ad-vice=建議=My teacher gave me good advice.
         if (currentMode === 'study') {
             html += `<div class="feedback" id="feedback-msg"></div>`;
             html += `<div class="syllable-display" id="syl-display">${isSyllableShown ? data.s.join(' • ') : ''}</div>`;
-            html += `<div class="big-word">${colorCodeWord(data.w)}</div>`;
+            html += `<div class="big-word noselect">${colorCodeWord(data.w)}</div>`;
             html += `<div class="chinese">${data.m}</div>`;
             html += `<div class="sentence">"${data.sent}"</div>`;
-            html += `<div class="nav-controls">
+            html += `<div class="nav-controls noselect">
                 <button class="action-btn" onclick="toggleSyllable()" style="background:#90A4AE">拆解</button>
                 <button class="speak-btn" onclick="speakWord()">🔊</button>
                 <button class="action-btn" onclick="nextWord()">下一字 ➡</button>
@@ -294,8 +312,8 @@ advice=ad-vice=建議=My teacher gave me good advice.
             html += `<div class="letter-slots" id="slots-area">`;
             for(let i=0; i<data.w.length; i++) html += data.w[i] === ' ' ? `<div class="slot space"> </div>` : `<div class="slot" id="slot-${i}"></div>`;
             html += `</div>`;
-            html += `<div class="scramble-area" id="block-btns"></div>`;
-            html += `<div class="nav-controls">
+            html += `<div class="scramble-area noselect" id="block-btns"></div>`;
+            html += `<div class="nav-controls noselect">
                 <button class="action-btn" style="background:#B0BEC5" onclick="renderGame()">重置 ↺</button>
                 <button class="speak-btn" onclick="speakWord()">🔊</button>
                 <button class="action-btn" onclick="nextWord()">跳過 ➡</button>
@@ -305,7 +323,7 @@ advice=ad-vice=建議=My teacher gave me good advice.
             html += `<div class="feedback" id="feedback-msg">聽寫練習</div>`;
             html += `<div class="chinese">${data.m}</div>`;
             html += `<input type="text" class="input-box" id="dict-input" autocomplete="off" placeholder="Type answer..." onkeypress="handleEnter(event)">`;
-            html += `<div class="nav-controls">
+            html += `<div class="nav-controls noselect">
                 <button class="action-btn" onclick="checkDictation()">檢查 ✅</button>
                 <button class="speak-btn" onclick="speakWord()">🔊</button>
                 <button class="action-btn" onclick="nextWord()">跳過 ➡</button>
@@ -315,6 +333,7 @@ advice=ad-vice=建議=My teacher gave me good advice.
         if(currentMode !== 'study') setTimeout(speakWord, 600);
     }
 
+    // Tools
     function colorCodeWord(w) { return w.split('').map(c => /[aeiou]/i.test(c) ? `<span class="vowel">${c}</span>` : (/[a-z]/i.test(c)?`<span class="consonant">${c}</span>`:c)).join(''); }
     function toggleSyllable() { isSyllableShown = !isSyllableShown; document.getElementById('syl-display').innerText = isSyllableShown ? currentLevelWords[currentIndex].s.join(' • ') : ''; }
     function nextWord() {
@@ -342,40 +361,31 @@ advice=ad-vice=建議=My teacher gave me good advice.
     }
     function setVoice() { currentVoice = synth.getVoices()[document.getElementById('voiceSelect').value]; }
     function speakWord() {
-        if(!currentVoice) initVoices();
-        const u = new SpeechSynthesisUtterance(currentLevelWords[currentIndex].w);
-        if(currentVoice) u.voice = currentVoice;
-        u.rate = 0.85; 
-        try { synth.cancel(); synth.speak(u); } catch(e) { console.log("Speech Error", e); }
+        try {
+            if(!currentVoice) initVoices();
+            const u = new SpeechSynthesisUtterance(currentLevelWords[currentIndex].w);
+            if(currentVoice) u.voice = currentVoice;
+            u.rate = 0.85; synth.cancel(); synth.speak(u);
+        } catch(e) { console.error(e); }
     }
 
-    // Logic: Block (Pointer Event 終極修復)
+    // Block Game (回歸標準 click 事件 + CSS touch-action)
     function initBlockGame(word) {
         let chars = word.split('').map((c,i)=>({c,i})).filter(x=>x.c!==' ');
         for(let i=chars.length-1; i>0; i--) { const j=Math.floor(Math.random()*(i+1)); [chars[i],chars[j]]=[chars[j],chars[i]]; }
         const area = document.getElementById('block-btns');
         chars.forEach(item => {
-            let btn = document.createElement('button'); btn.className = 'block-btn'; btn.innerText = item.c;
-            
-            // 關鍵：使用 pointerdown，這是所有觸控與點擊的祖先事件，反應最快
-            btn.onpointerdown = (e) => {
-                e.preventDefault(); // 防止反白或其他干擾
-                
-                // 邏輯開始
+            let btn = document.createElement('button'); btn.className = 'block-btn noselect'; btn.innerText = item.c;
+            btn.onclick = () => {
                 let idx = -1;
                 for(let k=0; k<word.length; k++) {
                     if(!document.getElementById(`slot-${k}`)?.innerText && word[k]!==' ') { idx=k; break; }
                 }
-                
                 if(idx !== -1) {
                     let s = document.getElementById(`slot-${idx}`); 
                     s.innerText = item.c; 
                     s.classList.add('filled');
-                    
-                    // 視覺回饋
-                    btn.classList.add('used');
-                    
-                    // 檢查答案
+                    btn.disabled = true; // 簡單明瞭
                     checkBlock(word);
                 }
             };
@@ -392,6 +402,7 @@ advice=ad-vice=建議=My teacher gave me good advice.
         }
     }
     
+    // Dictation
     function checkDictation() {
         const ans = document.getElementById('dict-input').value.trim().toLowerCase();
         const tgt = currentLevelWords[currentIndex].w.toLowerCase();
@@ -413,7 +424,6 @@ advice=ad-vice=建議=My teacher gave me good advice.
         }
     }
     
-    // 安全音效播放 (防止當機)
     function safePlaySound(good) {
         try {
             const ctx = new (window.AudioContext||window.webkitAudioContext)();
@@ -425,9 +435,7 @@ advice=ad-vice=建議=My teacher gave me good advice.
             else o.frequency.linearRampToValueAtTime(100, ctx.currentTime+0.2);
             g.gain.setValueAtTime(0.1, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime+(good?0.5:0.3));
             o.start(); o.stop(ctx.currentTime+(good?0.5:0.3));
-        } catch(e) {
-            console.log("Audio play failed, ignoring...", e);
-        }
+        } catch(e) {}
     }
 </script>
 </body>
