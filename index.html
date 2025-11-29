@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>拼字學習機 (手機修復版)</title>
+    
+    <style>
+        :root {
+            --primary: #FFD54F; --primary-dark: #FFC107; --secondary: #4FC3F7; --secondary-dark: #039BE5;
+            --accent: #FF7043; --bg: #FFF9C4; --text: #37474F; --white: #ffffff;
+            --vowel: #E53935; --consonant: #1565C0; --success: #66BB6A; --error: #EF5350;
+        }
+        
+        /* 關鍵修正：禁止手機上的長按選取與雙擊縮放 */
+        * { 
+            box-sizing: border-box; 
+            -webkit-tap-highlight-color: transparent; 
+            -webkit-touch-callout: none; /* iOS 禁止長按跳出選單 */
+            user-select: none; /* 禁止選取文字 */
+        }
+        
+        body {
+            font-family: 'Comic Sans MS', 'Chalkboard SE', '微軟正黑體', sans-serif;
+            background-color: var(--bg); color: var(--text); margin: 0; padding: 0;
+            display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+        }
+
+        /* Header */
+        header {
+            width: 100%; background: var(--primary); padding: 10px 15px;
+            text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            position: sticky; top: 0; z-index: 100;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .header-title { font-size: 1.2rem; font-weight: bold; color: #5D4037; flex-grow: 1; text-align: center; margin-left: 30px; }
+        .setting-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 5px; }
+
+        .controls-row { display: flex; justify-content: center; gap: 10px; width:100%; padding: 10px; background: #fff8e1;}
+        select { padding: 8px 15px; border-radius: 20px; border: 2px solid #ddd; font-size: 1rem; background: white; outline: none; }
+
+        /* Tabs */
+        .tabs { display: flex; width: 95%; max-width: 600px; margin: 10px auto; background: rgba(255,255,255,0.7); border-radius: 30px; padding: 5px; }
+        .tab-btn { flex: 1; padding: 10px; border: none; background: transparent; cursor: pointer; font-weight: bold; font-size: 1rem; border-radius: 25px; color: #90A4AE; transition:0.2s; }
+        .tab-btn.active { background: var(--secondary); color: white; box-shadow: 0 3px 6px rgba(3, 155, 229, 0.3); }
+
+        /* Game Area */
+        #game-area {
+            width: 95%; max-width: 600px; background: white; border-radius: 25px; padding: 25px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.08); text-align: center; margin-bottom: 20px;
+            min-height: 350px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative;
+        }
+
+        /* Elements */
+        .big-word { font-size: 3rem; font-weight: bold; margin: 15px 0; letter-spacing: 1px; line-height: 1.2; word-break: break-word; user-select: text; /* 只有大單字允許選取 */ }
+        .vowel { color: var(--vowel); } .consonant { color: var(--consonant); }
+        .syllable-display { font-size: 1.5rem; color: #90A4AE; margin-bottom: 5px; height: 30px; font-family: monospace; }
+        
+        .letter-slots { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 20px 0; min-height: 60px; }
+        .slot { width: 40px; height: 45px; border-bottom: 4px solid #E0E0E0; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: bold; }
+        .slot.filled { border-bottom-color: var(--secondary); transform: translateY(-2px); }
+        .slot.space { border-bottom: none; width: 15px; }
+        
+        .scramble-area { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
+        
+        /* 關鍵修正：按鈕樣式與觸控行為 */
+        .block-btn { 
+            width: 48px; height: 48px; 
+            background: var(--primary); 
+            border: none; border-radius: 10px; 
+            font-size: 1.6rem; font-weight: bold; 
+            cursor: pointer; 
+            box-shadow: 0 4px 0 var(--primary-dark);
+            touch-action: manipulation; /* 解決手機雙擊延遲 */
+            transition: all 0.1s;
+        }
+        .block-btn:active { transform: translateY(4px); box-shadow: none; }
+        /* 按下後變透明，而不是隱藏，保持排版穩定 */
+        .block-btn:disabled { 
+            opacity: 0; 
+            pointer-events: none; 
+            cursor: default; 
+        }
+        
+        .input-box { font-size: 1.8rem; padding: 10px; width: 90%; text-align: center; border: 3px solid var(--secondary); border-radius: 15px; outline: none; margin: 20px 0; background: #FAFAFA; user-select: text;}
+        .input-box:focus { border-color: var(--secondary-dark); background: #FFF; }
+        
+        .chinese { font-size: 1.5rem; margin-top: 5px; color: #546E7A; font-weight: bold; }
+        .sentence { font-style: italic; color: #78909C; margin-top: 15px; font-size: 1rem; background: #ECEFF1; padding: 8px 15px; border-radius: 15px; display: inline-block; }
+        
+        .nav-controls { display: flex; justify-content: space-around; align-items: center; width: 100%; margin-top: auto; padding-top: 25px; }
+        .action-btn { background: var(--accent); color: white; border: none; padding: 10px 24px; border-radius: 50px; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 0 #D84315; font-weight: bold; touch-action: manipulation; }
+        .action-btn:active { transform: translateY(4px); box-shadow: none; }
+        .speak-btn { width: 60px; height: 60px; border-radius: 50%; font-size: 26px; background: var(--secondary); box-shadow: 0 5px 0 #0288D1; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; color: white; touch-action: manipulation; }
+        .speak-btn:active { transform: translateY(4px); box-shadow: none; }
+        
+        .feedback { font-size: 1.3rem; height: 30px; margin-bottom: 5px; font-weight: bold; }
+        .progress-indicator { position: absolute; top: 15px; right: 20px; font-size: 0.9rem; color: #B0BEC5; font-weight: bold; }
+
+        /* Settings Modal */
+        #settings-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; }
+        .modal-content { background: white; width: 90%; max-width: 500px; padding: 20px; border-radius: 15px; max-height: 85vh; overflow-y: auto; text-align: left; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+        textarea { width: 100%; height: 250px; border: 2px solid #eee; padding: 10px; font-family: monospace; font-size: 0.9rem; border-radius: 8px; resize: vertical; user-select: text; }
+        .modal-actions { text-align: right; margin-top: 15px; display: flex; justify-content: flex-end; gap: 10px; }
+        
+        /* Animation */
+        @keyframes shake { 0%, 100% {transform: translateX(0);} 25% {transform: translateX(-5px);} 75% {transform: translateX(5px);} }
+        @keyframes pop { 50% {transform: scale(1.2);} }
+        .anim-shake { animation: shake 0.4s; color: var(--error); }
+        .anim-pop { animation: pop 0.3s; color: var(--success); }
+        
+        @media (max-width: 480px) { .big-word { font-size: 2.5rem; } }
+    </style>
+</head>
+<body>
+
+<header>
+    <div style="width:30px"></div>
+    <div class="header-title">🐝 Spelling Bee</div>
+    <button class="setting-btn" onclick="openSettings()">⚙️</button>
+</header>
+
+<div class="controls-row">
+    <select id="levelSelect" onchange="changeLevel()"></select>
+    <select id="voiceSelect" onchange="setVoice()"><option>Loading...</option></select>
+</div>
+
+<div class="tabs">
+    <button class="tab-btn active" onclick="switchMode('study')" id="tab-study">👀 學習</button>
+    <button class="tab-btn" onclick="switchMode('block')" id="tab-block">🧩 拼圖</button>
+    <button class="tab-btn" onclick="switchMode('dictation')" id="tab-dictation">✍️ 聽寫</button>
+</div>
+
+<div id="game-area"></div>
+
+<div id="settings-modal">
+    <div class="modal-content">
+        <h3 style="margin-top:0; color:var(--text)">📝 編輯單字庫</h3>
+        <p style="font-size:0.9rem; color:#666; background:#f5f5f5; padding:8px; border-radius:5px;">
+            格式：單字=音節=中文=例句<br>
+            (按下儲存後，手機會記住您的設定)
+        </p>
+        <textarea id="data-input"></textarea>
+        <div class="modal-actions">
+            <button class="action-btn" style="background:#B0BEC5" onclick="closeSettings()">取消</button>
+            <button class="action-btn" style="background:#FFB74D" onclick="resetDefault()">恢復預設</button>
+            <button class="action-btn" style="background:var(--success)" onclick="saveData()">💾 儲存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ==========================================
+    // 1. 預設資料
+    // ==========================================
+    const defaultDataRaw = `
+attach=at-tach=附上；貼上=Please attach the photo to the email.
+grunted=grunt-ed=發出哼聲=The pig grunted while eating.
+lumber=lum-ber=木材=They used lumber to build the house.
+screwdriver=screw-driv-er=螺絲起子=Use a screwdriver to fix the toy.
+sneakers=sneak-ers=運動鞋=I run fast in my new sneakers.
+beneath=be-neath=在...之下=The cat is sleeping beneath the table.
+laces=la-ces=鞋帶=Tie your shoe laces tight.
+perfectly=per-fect-ly=完美地=The dress fits her perfectly.
+shrunk=shrunk=縮水(shrink的過去分詞)=My shirt shrunk in the wash.
+splinters=splin-ters=碎片；刺=Be careful of wood splinters.
+board=board=板子；木板=Write your name on the board.
+loosened=loos-ened=變鬆=The knot loosened by itself.
+roller skates=rol-ler-skates=溜冰鞋=She loves to wear roller skates.
+skateboard=skate-board=滑板=He can do tricks on his skateboard.
+travel=trav-el=旅行=We like to travel to Japan.
+alley=al-ley=小巷=The cat ran into the dark alley.
+explore=ex-plore=探索=Let's explore the forest.
+pup=pup=小狗 (Puppy)=The cute pup is playing with a ball.
+collar=col-lar=項圈=The dog has a red collar.
+furniture=fur-ni-ture=家具=We bought new furniture.
+racket=rack-et=球拍=I need a tennis racket.
+crash=crash=撞擊；墜毀=We heard a loud car crash.
+mover=mov-er=搬家工人=The mover carried the heavy box.
+track down=track-down=追蹤到；找到=The detective tried to track down the thief.
+van=van=廂型車=We moved our things in a big van.
+exclaim=ex-claim=驚叫；呼喊='Wow!' she exclaimed.
+poke=poke=戳=Don't poke the bear.
+trouble=trou-ble=麻煩=He got into trouble at school.
+treats=treats=點心；款待=I give my dog tasty treats.
+train=train=火車；訓練=The train is arriving at the station.
+unpack=un-pack=打開包裹=Let's unpack the boxes.
+wag=wag=搖 (尾巴)=The dog wags its tail.
+advice=ad-vice=建議=My teacher gave me good advice.
+`;
+
+    // ==========================================
+    // 2. 核心變數
+    // ==========================================
+    let allWords = [];
+    let currentLevelWords = [];
+    let currentIndex = 0;
+    let currentMode = 'study';
+    let currentVoice = null;
+    let isSyllableShown = false;
+    const synth = window.speechSynthesis;
+    const STORAGE_KEY = 'spelling_bee_v3_1_data'; // 更新 Key 避免快取衝突
+
+    // ==========================================
+    // 3. 啟動與資料載入
+    // ==========================================
+    window.onload = function() {
+        loadData();
+        initVoices();
+    };
+
+    function loadData() {
+        let stored = localStorage.getItem(STORAGE_KEY);
+        if (!stored || stored.trim() === '') {
+            stored = defaultDataRaw.trim();
+        }
+        parseAndSetData(stored);
+    }
+
+    function parseAndSetData(text) {
+        allWords = [];
+        const lines = text.split('\n');
+        lines.forEach(line => {
+            if(line.trim() === '') return;
+            const parts = line.split('=');
+            if(parts.length >= 1) {
+                const w = parts[0].trim();
+                const s = parts[1] ? parts[1].split('-') : [w];
+                const m = parts[2] || "";
+                const sent = parts[3] || "";
+                allWords.push({ w: w, s: s, m: m, sent: sent });
+            }
+        });
+        
+        initLevels();
+        loadLevel(0);
+    }
+
+    // ==========================================
+    // 4. 設定功能
+    // ==========================================
+    function openSettings() {
+        const modal = document.getElementById('settings-modal');
+        const textarea = document.getElementById('data-input');
+        let stored = localStorage.getItem(STORAGE_KEY);
+        textarea.value = stored ? stored : defaultDataRaw.trim();
+        modal.style.display = 'flex';
+    }
+
+    function closeSettings() {
+        document.getElementById('settings-modal').style.display = 'none';
+    }
+
+    function saveData() {
+        const val = document.getElementById('data-input').value.trim();
+        if(!val) { alert("內容不能為空"); return; }
+        localStorage.setItem(STORAGE_KEY, val);
+        parseAndSetData(val);
+        alert("設定已儲存！");
+        closeSettings();
+    }
+
+    function resetDefault() {
+        if(confirm("確定要恢復成原始設定嗎？")) {
+            localStorage.removeItem(STORAGE_KEY);
+            parseAndSetData(defaultDataRaw.trim());
+            document.getElementById('data-input').value = defaultDataRaw.trim();
+            closeSettings();
+        }
+    }
+
+    // ==========================================
+    // 5. 遊戲邏輯
+    // ==========================================
+    function initLevels() {
+        const select = document.getElementById('levelSelect');
+        select.innerHTML = '';
+        if(allWords.length === 0) return;
+        
+        const totalLevels = Math.ceil(allWords.length / 10);
+        for(let i=0; i<totalLevels; i++) {
+            let opt = document.createElement('option');
+            opt.value = i;
+            let end = Math.min((i+1)*10, allWords.length);
+            opt.text = `Level ${i+1} (${i*10+1}-${end})`;
+            select.appendChild(opt);
+        }
+        let allOpt = document.createElement('option');
+        allOpt.value = 'all'; allOpt.text = '全部 All';
+        select.appendChild(allOpt);
+    }
+
+    function loadLevel(val) {
+        if(val === 'all') currentLevelWords = [...allWords];
+        else {
+            let start = parseInt(val) * 10;
+            currentLevelWords = allWords.slice(start, start+10);
+        }
+        currentIndex = 0;
+        isSyllableShown = false;
+        renderGame();
+    }
+
+    function renderGame() {
+        const container = document.getElementById('game-area');
+        const data = currentLevelWords[currentIndex];
+        if(!data) { container.innerHTML = "無資料"; return; }
+
+        let html = `<div class="progress-indicator">${currentIndex+1} / ${currentLevelWords.length}</div>`;
+
+        if (currentMode === 'study') {
+            html += `<div class="feedback" id="feedback-msg"></div>`;
+            html += `<div class="syllable-display" id="syl-display">${isSyllableShown ? data.s.join(' • ') : ''}</div>`;
+            html += `<div class="big-word">${colorCodeWord(data.w)}</div>`;
+            html += `<div class="chinese">${data.m}</div>`;
+            html += `<div class="sentence">"${data.sent}"</div>`;
+            html += `<div class="nav-controls">
+                <button class="action-btn" onclick="toggleSyllable()" style="background:#90A4AE">拆解</button>
+                <button class="speak-btn" onclick="speakWord()">🔊</button>
+                <button class="action-btn" onclick="nextWord()">下一字 ➡</button>
+            </div>`;
+        } else if (currentMode === 'block') {
+            html += `<div class="feedback" id="feedback-msg">重組練習</div>`;
+            html += `<div class="chinese">${data.m}</div>`;
+            html += `<div class="letter-slots" id="slots-area">`;
+            for(let i=0; i<data.w.length; i++) html += data.w[i] === ' ' ? `<div class="slot space"> </div>` : `<div class="slot" id="slot-${i}"></div>`;
+            html += `</div>`;
+            html += `<div class="scramble-area" id="block-btns"></div>`;
+            html += `<div class="nav-controls">
+                <button class="action-btn" style="background:#B0BEC5" onclick="renderGame()">重置 ↺</button>
+                <button class="speak-btn" onclick="speakWord()">🔊</button>
+                <button class="action-btn" onclick="nextWord()">跳過 ➡</button>
+            </div>`;
+            setTimeout(() => initBlockGame(data.w), 0);
+        } else if (currentMode === 'dictation') {
+            html += `<div class="feedback" id="feedback-msg">聽寫練習</div>`;
+            html += `<div class="chinese">${data.m}</div>`;
+            html += `<input type="text" class="input-box" id="dict-input" autocomplete="off" placeholder="Type answer..." onkeypress="handleEnter(event)">`;
+            html += `<div class="nav-controls">
+                <button class="action-btn" onclick="checkDictation()">檢查 ✅</button>
+                <button class="speak-btn" onclick="speakWord()">🔊</button>
+                <button class="action-btn" onclick="nextWord()">跳過 ➡</button>
+            </div>`;
+        }
+        container.innerHTML = html;
+        if(currentMode !== 'study') setTimeout(speakWord, 600);
+    }
+
+    function colorCodeWord(w) {
+        return w.split('').map(c => /[aeiou]/i.test(c) ? `<span class="vowel">${c}</span>` : (/[a-z]/i.test(c)?`<span class="consonant">${c}</span>`:c)).join('');
+    }
+    function toggleSyllable() {
+        isSyllableShown = !isSyllableShown;
+        document.getElementById('syl-display').innerText = isSyllableShown ? currentLevelWords[currentIndex].s.join(' • ') : '';
+    }
+    function nextWord() {
+        if (currentIndex < currentLevelWords.length - 1) { currentIndex++; renderGame(); }
+        else { if(confirm("完成本組！重來一次？")) { currentIndex=0; renderGame(); } }
+    }
+    
+    // Voice
+    function initVoices() {
+        const s = document.getElementById('voiceSelect');
+        function load() {
+            let vs = synth.getVoices();
+            if(vs.length===0) return;
+            s.innerHTML = '';
+            vs.forEach((v,i) => {
+                let opt = document.createElement('option'); opt.value = i;
+                opt.text = `${v.name.substring(0,20)} (${v.lang})`;
+                s.appendChild(opt);
+                if(v.lang==='en-US' && v.name.includes('Google')) s.selectedIndex = i;
+            });
+            currentVoice = vs[s.selectedIndex];
+        }
+        load();
+        if(speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = load;
+    }
+    function setVoice() { currentVoice = synth.getVoices()[document.getElementById('voiceSelect').value]; }
+    function speakWord() {
+        if(!currentVoice) initVoices();
+        const u = new SpeechSynthesisUtterance(currentLevelWords[currentIndex].w);
+        if(currentVoice) u.voice = currentVoice;
+        u.rate = 0.85; synth.cancel(); synth.speak(u);
+    }
+
+    // Logic: Block (修正手機點擊)
+    function initBlockGame(word) {
+        let chars = word.split('').map((c,i)=>({c,i})).filter(x=>x.c!==' ');
+        for(let i=chars.length-1; i>0; i--) { const j=Math.floor(Math.random()*(i+1)); [chars[i],chars[j]]=[chars[j],chars[i]]; }
+        const area = document.getElementById('block-btns');
+        chars.forEach(item => {
+            let btn = document.createElement('button'); btn.className = 'block-btn'; btn.innerText = item.c;
+            // 使用 click 搭配 CSS touch-action 解決問題
+            btn.onclick = (e) => {
+                e.preventDefault(); // 防止預設行為
+                let idx = -1;
+                for(let k=0; k<word.length; k++) if(!document.getElementById(`slot-${k}`)?.innerText && word[k]!==' ') { idx=k; break; }
+                if(idx!==-1) {
+                    let s = document.getElementById(`slot-${idx}`); s.innerText = item.c; s.classList.add('filled');
+                    // 改用 disabled + opacity 避免手機排版跳動
+                    btn.disabled = true;
+                    checkBlock(word);
+                }
+            };
+            area.appendChild(btn);
+        });
+    }
+    function checkBlock(target) {
+        let cur = '';
+        for(let i=0; i<target.length; i++) cur += target[i]===' '?' ':document.getElementById(`slot-${i}`).innerText;
+        if(cur.length === target.length) {
+            if(cur.toLowerCase()===target.toLowerCase()) feedback(true);
+            else { feedback(false); setTimeout(renderGame, 1000); }
+        }
+    }
+    
+    // Logic: Dictation
+    function checkDictation() {
+        const ans = document.getElementById('dict-input').value.trim().toLowerCase();
+        const tgt = currentLevelWords[currentIndex].w.toLowerCase();
+        if(ans===tgt) feedback(true); else feedback(false);
+    }
+    function handleEnter(e) { if(e.key==='Enter') checkDictation(); }
+
+    function feedback(correct) {
+        const m = document.getElementById('feedback-msg');
+        const inp = document.getElementById('dict-input');
+        if(correct) {
+            m.innerHTML = "<span class='anim-pop' style='color:var(--success)'>Correct! 🎉</span>";
+            if(inp) { inp.style.borderColor = "var(--success)"; inp.style.background="#E8F5E9"; }
+            playSound(true); setTimeout(nextWord, 1200);
+        } else {
+            m.innerHTML = "<span class='anim-shake' style='color:var(--error)'>Try Again 😅</span>";
+            if(inp) { inp.classList.add('anim-shake'); inp.style.borderColor = "var(--error)"; inp.style.background="#FFEBEE"; setTimeout(()=>inp.classList.remove('anim-shake'),500); }
+            playSound(false);
+        }
+    }
+    
+    function playSound(good) {
+        const ctx = new (window.AudioContext||window.webkitAudioContext)();
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = good?'sine':'triangle';
+        o.frequency.setValueAtTime(good?600:150, ctx.currentTime);
+        if(good) o.frequency.exponentialRampToValueAtTime(900, ctx.currentTime+0.1);
+        else o.frequency.linearRampToValueAtTime(100, ctx.currentTime+0.2);
+        g.gain.setValueAtTime(0.1, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime+(good?0.5:0.3));
+        o.start(); o.stop(ctx.currentTime+(good?0.5:0.3));
+    }
+</script>
+</body>
+</html>
