@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>拼字學習機 (V3.4 完整修正版)</title>
+    <title>拼字學習機 V3.5 (分級修復版)</title>
     
     <style>
         :root {
@@ -14,7 +14,6 @@
             --vowel: #E53935; --consonant: #1565C0; --success: #66BB6A; --error: #EF5350;
         }
         
-        /* 基礎設定 */
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
         body {
@@ -24,12 +23,9 @@
             overscroll-behavior-y: none;
         }
 
-        /* 禁止選取的工具類別 (用於按鈕，避免誤選文字) */
+        /* 禁止選取 (用於按鈕) */
         .noselect {
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
+            -webkit-user-select: none; user-select: none;
         }
 
         /* Header */
@@ -57,7 +53,6 @@
             min-height: 350px; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative;
         }
 
-        /* Elements */
         .big-word { font-size: 3rem; font-weight: bold; margin: 15px 0; letter-spacing: 1px; line-height: 1.2; word-break: break-word; }
         .vowel { color: var(--vowel); } .consonant { color: var(--consonant); }
         .syllable-display { font-size: 1.5rem; color: #90A4AE; margin-bottom: 5px; height: 30px; font-family: monospace; }
@@ -69,30 +64,19 @@
         
         .scramble-area { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
         
-        /* 按鈕樣式 */
         .block-btn { 
-            width: 50px; height: 50px; 
-            background: var(--primary); 
-            border: none; border-radius: 12px; 
-            font-size: 1.6rem; font-weight: bold; 
-            box-shadow: 0 4px 0 var(--primary-dark);
-            cursor: pointer;
-            touch-action: manipulation; 
-            transition: transform 0.1s, opacity 0.2s;
+            width: 50px; height: 50px; background: var(--primary); 
+            border: none; border-radius: 12px; font-size: 1.6rem; font-weight: bold; 
+            box-shadow: 0 4px 0 var(--primary-dark); cursor: pointer;
+            touch-action: manipulation; transition: transform 0.1s, opacity 0.2s;
         }
         .block-btn:active { transform: translateY(4px); box-shadow: none; }
-        .block-btn:disabled { 
-            opacity: 0; 
-            pointer-events: none;
-            cursor: default;
-        }
+        .block-btn:disabled { opacity: 0; pointer-events: none; cursor: default; }
         
-        /* 輸入框設定 (必須允許選取) */
         .input-box { 
             font-size: 1.8rem; padding: 10px; width: 90%; text-align: center; 
             border: 3px solid var(--secondary); border-radius: 15px; outline: none; 
-            margin: 20px 0; background: #FAFAFA; 
-            -webkit-user-select: text; user-select: text; 
+            margin: 20px 0; background: #FAFAFA; -webkit-user-select: text; user-select: text; 
         }
         .input-box:focus { border-color: var(--secondary-dark); background: #FFF; }
         
@@ -204,7 +188,7 @@ advice=ad-vice=建議=My teacher gave me good advice.
     let currentVoice = null;
     let isSyllableShown = false;
     const synth = window.speechSynthesis;
-    const STORAGE_KEY = 'spelling_bee_v3_4_fix'; 
+    const STORAGE_KEY = 'spelling_bee_v3_5_fix'; 
 
     window.onload = function() {
         loadData();
@@ -225,229 +209,4 @@ advice=ad-vice=建議=My teacher gave me good advice.
             const parts = line.split('=');
             if(parts.length >= 1) {
                 const w = parts[0].trim();
-                const s = parts[1] ? parts[1].split('-') : [w];
-                const m = parts[2] || "";
-                const sent = parts[3] || "";
-                allWords.push({ w: w, s: s, m: m, sent: sent });
-            }
-        });
-        initLevels();
-        loadLevel(0);
-    }
-
-    // ==========================================
-    // 2. 關鍵修正：補回切換模式功能
-    // ==========================================
-    function switchMode(mode) {
-        currentMode = mode;
-        // 更新按鈕外觀
-        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-        document.getElementById(`tab-${mode}`).classList.add('active');
-        
-        // 重置狀態
-        isSyllableShown = false;
-        renderGame();
-    }
-
-    // Settings
-    function openSettings() {
-        let stored = localStorage.getItem(STORAGE_KEY);
-        document.getElementById('data-input').value = stored ? stored : defaultDataRaw.trim();
-        document.getElementById('settings-modal').style.display = 'flex';
-    }
-    function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
-    function saveData() {
-        const val = document.getElementById('data-input').value.trim();
-        if(!val) { alert("內容不能為空"); return; }
-        localStorage.setItem(STORAGE_KEY, val);
-        parseAndSetData(val);
-        alert("設定已儲存！");
-        closeSettings();
-    }
-    function resetDefault() {
-        if(confirm("確定要恢復成原始設定嗎？")) {
-            localStorage.removeItem(STORAGE_KEY);
-            parseAndSetData(defaultDataRaw.trim());
-            document.getElementById('data-input').value = defaultDataRaw.trim();
-            closeSettings();
-        }
-    }
-
-    // Game Logic
-    function initLevels() {
-        const select = document.getElementById('levelSelect');
-        select.innerHTML = '';
-        if(allWords.length === 0) return;
-        const totalLevels = Math.ceil(allWords.length / 10);
-        for(let i=0; i<totalLevels; i++) {
-            let opt = document.createElement('option'); opt.value = i;
-            let end = Math.min((i+1)*10, allWords.length);
-            opt.text = `Level ${i+1} (${i*10+1}-${end})`;
-            select.appendChild(opt);
-        }
-        let allOpt = document.createElement('option'); allOpt.value = 'all'; allOpt.text = '全部 All';
-        select.appendChild(allOpt);
-    }
-
-    function loadLevel(val) {
-        if(val === 'all') currentLevelWords = [...allWords];
-        else {
-            let start = parseInt(val) * 10;
-            currentLevelWords = allWords.slice(start, start+10);
-        }
-        currentIndex = 0;
-        isSyllableShown = false;
-        renderGame();
-    }
-
-    function renderGame() {
-        const container = document.getElementById('game-area');
-        const data = currentLevelWords[currentIndex];
-        if(!data) { container.innerHTML = "無資料"; return; }
-
-        let html = `<div class="progress-indicator">${currentIndex+1} / ${currentLevelWords.length}</div>`;
-
-        if (currentMode === 'study') {
-            html += `<div class="feedback" id="feedback-msg"></div>`;
-            html += `<div class="syllable-display" id="syl-display">${isSyllableShown ? data.s.join(' • ') : ''}</div>`;
-            html += `<div class="big-word noselect">${colorCodeWord(data.w)}</div>`;
-            html += `<div class="chinese">${data.m}</div>`;
-            html += `<div class="sentence">"${data.sent}"</div>`;
-            html += `<div class="nav-controls noselect">
-                <button class="action-btn" onclick="toggleSyllable()" style="background:#90A4AE">拆解</button>
-                <button class="speak-btn" onclick="speakWord()">🔊</button>
-                <button class="action-btn" onclick="nextWord()">下一字 ➡</button>
-            </div>`;
-        } else if (currentMode === 'block') {
-            html += `<div class="feedback" id="feedback-msg">重組練習</div>`;
-            html += `<div class="chinese">${data.m}</div>`;
-            html += `<div class="letter-slots" id="slots-area">`;
-            for(let i=0; i<data.w.length; i++) html += data.w[i] === ' ' ? `<div class="slot space"> </div>` : `<div class="slot" id="slot-${i}"></div>`;
-            html += `</div>`;
-            html += `<div class="scramble-area noselect" id="block-btns"></div>`;
-            html += `<div class="nav-controls noselect">
-                <button class="action-btn" style="background:#B0BEC5" onclick="renderGame()">重置 ↺</button>
-                <button class="speak-btn" onclick="speakWord()">🔊</button>
-                <button class="action-btn" onclick="nextWord()">跳過 ➡</button>
-            </div>`;
-            setTimeout(() => initBlockGame(data.w), 0);
-        } else if (currentMode === 'dictation') {
-            html += `<div class="feedback" id="feedback-msg">聽寫練習</div>`;
-            html += `<div class="chinese">${data.m}</div>`;
-            html += `<input type="text" class="input-box" id="dict-input" autocomplete="off" placeholder="Type answer..." onkeypress="handleEnter(event)">`;
-            html += `<div class="nav-controls noselect">
-                <button class="action-btn" onclick="checkDictation()">檢查 ✅</button>
-                <button class="speak-btn" onclick="speakWord()">🔊</button>
-                <button class="action-btn" onclick="nextWord()">跳過 ➡</button>
-            </div>`;
-        }
-        container.innerHTML = html;
-        if(currentMode !== 'study') setTimeout(speakWord, 600);
-    }
-
-    function colorCodeWord(w) { return w.split('').map(c => /[aeiou]/i.test(c) ? `<span class="vowel">${c}</span>` : (/[a-z]/i.test(c)?`<span class="consonant">${c}</span>`:c)).join(''); }
-    function toggleSyllable() { isSyllableShown = !isSyllableShown; document.getElementById('syl-display').innerText = isSyllableShown ? currentLevelWords[currentIndex].s.join(' • ') : ''; }
-    function nextWord() {
-        if (currentIndex < currentLevelWords.length - 1) { currentIndex++; renderGame(); }
-        else { if(confirm("完成本組！重來一次？")) { currentIndex=0; renderGame(); } }
-    }
-    
-    // Voice
-    function initVoices() {
-        const s = document.getElementById('voiceSelect');
-        function load() {
-            let vs = synth.getVoices();
-            if(vs.length===0) return;
-            s.innerHTML = '';
-            vs.forEach((v,i) => {
-                let opt = document.createElement('option'); opt.value = i;
-                opt.text = `${v.name.substring(0,20)} (${v.lang})`;
-                s.appendChild(opt);
-                if(v.lang==='en-US' && v.name.includes('Google')) s.selectedIndex = i;
-            });
-            currentVoice = vs[s.selectedIndex];
-        }
-        load();
-        if(speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = load;
-    }
-    function setVoice() { currentVoice = synth.getVoices()[document.getElementById('voiceSelect').value]; }
-    function speakWord() {
-        try {
-            if(!currentVoice) initVoices();
-            const u = new SpeechSynthesisUtterance(currentLevelWords[currentIndex].w);
-            if(currentVoice) u.voice = currentVoice;
-            u.rate = 0.85; synth.cancel(); synth.speak(u);
-        } catch(e) { console.error(e); }
-    }
-
-    // Logic: Block
-    function initBlockGame(word) {
-        let chars = word.split('').map((c,i)=>({c,i})).filter(x=>x.c!==' ');
-        for(let i=chars.length-1; i>0; i--) { const j=Math.floor(Math.random()*(i+1)); [chars[i],chars[j]]=[chars[j],chars[i]]; }
-        const area = document.getElementById('block-btns');
-        chars.forEach(item => {
-            let btn = document.createElement('button'); btn.className = 'block-btn noselect'; btn.innerText = item.c;
-            btn.onclick = () => {
-                let idx = -1;
-                for(let k=0; k<word.length; k++) {
-                    if(!document.getElementById(`slot-${k}`)?.innerText && word[k]!==' ') { idx=k; break; }
-                }
-                if(idx !== -1) {
-                    let s = document.getElementById(`slot-${idx}`); 
-                    s.innerText = item.c; 
-                    s.classList.add('filled');
-                    btn.disabled = true;
-                    checkBlock(word);
-                }
-            };
-            area.appendChild(btn);
-        });
-    }
-
-    function checkBlock(target) {
-        let cur = '';
-        for(let i=0; i<target.length; i++) cur += target[i]===' '?' ':document.getElementById(`slot-${i}`).innerText;
-        if(cur.length === target.length) {
-            if(cur.toLowerCase()===target.toLowerCase()) feedback(true);
-            else { feedback(false); setTimeout(renderGame, 1000); }
-        }
-    }
-    
-    // Dictation
-    function checkDictation() {
-        const ans = document.getElementById('dict-input').value.trim().toLowerCase();
-        const tgt = currentLevelWords[currentIndex].w.toLowerCase();
-        if(ans===tgt) feedback(true); else feedback(false);
-    }
-    function handleEnter(e) { if(e.key==='Enter') checkDictation(); }
-
-    function feedback(correct) {
-        const m = document.getElementById('feedback-msg');
-        const inp = document.getElementById('dict-input');
-        if(correct) {
-            m.innerHTML = "<span class='anim-pop' style='color:var(--success)'>Correct! 🎉</span>";
-            if(inp) { inp.style.borderColor = "var(--success)"; inp.style.background="#E8F5E9"; }
-            safePlaySound(true); setTimeout(nextWord, 1200);
-        } else {
-            m.innerHTML = "<span class='anim-shake' style='color:var(--error)'>Try Again 😅</span>";
-            if(inp) { inp.classList.add('anim-shake'); inp.style.borderColor = "var(--error)"; inp.style.background="#FFEBEE"; setTimeout(()=>inp.classList.remove('anim-shake'),500); }
-            safePlaySound(false);
-        }
-    }
-    
-    function safePlaySound(good) {
-        try {
-            const ctx = new (window.AudioContext||window.webkitAudioContext)();
-            const o = ctx.createOscillator(); const g = ctx.createGain();
-            o.connect(g); g.connect(ctx.destination);
-            o.type = good?'sine':'triangle';
-            o.frequency.setValueAtTime(good?600:150, ctx.currentTime);
-            if(good) o.frequency.exponentialRampToValueAtTime(900, ctx.currentTime+0.1);
-            else o.frequency.linearRampToValueAtTime(100, ctx.currentTime+0.2);
-            g.gain.setValueAtTime(0.1, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime+(good?0.5:0.3));
-            o.start(); o.stop(ctx.currentTime+(good?0.5:0.3));
-        } catch(e) {}
-    }
-</script>
-</body>
-</html>
+                const s = parts[1]
