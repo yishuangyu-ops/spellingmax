@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>拼字學習機 (V3.3 穩定修復版)</title>
+    <title>拼字學習機 (V3.4 完整修正版)</title>
     
     <style>
         :root {
@@ -14,18 +14,17 @@
             --vowel: #E53935; --consonant: #1565C0; --success: #66BB6A; --error: #EF5350;
         }
         
-        /* 基礎設定：移除全域禁止選取，避免鎖死輸入框 */
+        /* 基礎設定 */
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         
         body {
             font-family: 'Comic Sans MS', 'Chalkboard SE', '微軟正黑體', sans-serif;
             background-color: var(--bg); color: var(--text); margin: 0; padding: 0;
             display: flex; flex-direction: column; align-items: center; min-height: 100vh;
-            /* 防止手機過度滑動 */
             overscroll-behavior-y: none;
         }
 
-        /* 禁止選取的工具類別 (只用在按鈕和標籤，不影響輸入框) */
+        /* 禁止選取的工具類別 (用於按鈕，避免誤選文字) */
         .noselect {
             -webkit-user-select: none;
             -moz-user-select: none;
@@ -70,7 +69,7 @@
         
         .scramble-area { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
         
-        /* 按鈕樣式 (關鍵修復) */
+        /* 按鈕樣式 */
         .block-btn { 
             width: 50px; height: 50px; 
             background: var(--primary); 
@@ -78,18 +77,17 @@
             font-size: 1.6rem; font-weight: bold; 
             box-shadow: 0 4px 0 var(--primary-dark);
             cursor: pointer;
-            /* 這是讓手機版點擊順暢的關鍵 CSS，不需要改 JS */
             touch-action: manipulation; 
             transition: transform 0.1s, opacity 0.2s;
         }
         .block-btn:active { transform: translateY(4px); box-shadow: none; }
         .block-btn:disabled { 
-            opacity: 0; /* 視覺隱藏但佔位 */
-            pointer-events: none; /* 禁止再次點擊 */
+            opacity: 0; 
+            pointer-events: none;
             cursor: default;
         }
         
-        /* 輸入框必須允許選取 (user-select: text) */
+        /* 輸入框設定 (必須允許選取) */
         .input-box { 
             font-size: 1.8rem; padding: 10px; width: 90%; text-align: center; 
             border: 3px solid var(--secondary); border-radius: 15px; outline: none; 
@@ -160,7 +158,7 @@
 
 <script>
     // ==========================================
-    // 1. 預設資料 (Attach set)
+    // 1. 預設資料
     // ==========================================
     const defaultDataRaw = `
 attach=at-tach=附上；貼上=Please attach the photo to the email.
@@ -198,7 +196,7 @@ wag=wag=搖 (尾巴)=The dog wags its tail.
 advice=ad-vice=建議=My teacher gave me good advice.
 `;
 
-    // 核心變數
+    // 變數
     let allWords = [];
     let currentLevelWords = [];
     let currentIndex = 0;
@@ -206,7 +204,7 @@ advice=ad-vice=建議=My teacher gave me good advice.
     let currentVoice = null;
     let isSyllableShown = false;
     const synth = window.speechSynthesis;
-    const STORAGE_KEY = 'spelling_bee_v3_3_stable'; // 新的 Key
+    const STORAGE_KEY = 'spelling_bee_v3_4_fix'; 
 
     window.onload = function() {
         loadData();
@@ -237,6 +235,20 @@ advice=ad-vice=建議=My teacher gave me good advice.
         loadLevel(0);
     }
 
+    // ==========================================
+    // 2. 關鍵修正：補回切換模式功能
+    // ==========================================
+    function switchMode(mode) {
+        currentMode = mode;
+        // 更新按鈕外觀
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(`tab-${mode}`).classList.add('active');
+        
+        // 重置狀態
+        isSyllableShown = false;
+        renderGame();
+    }
+
     // Settings
     function openSettings() {
         let stored = localStorage.getItem(STORAGE_KEY);
@@ -261,7 +273,7 @@ advice=ad-vice=建議=My teacher gave me good advice.
         }
     }
 
-    // Levels
+    // Game Logic
     function initLevels() {
         const select = document.getElementById('levelSelect');
         select.innerHTML = '';
@@ -333,7 +345,6 @@ advice=ad-vice=建議=My teacher gave me good advice.
         if(currentMode !== 'study') setTimeout(speakWord, 600);
     }
 
-    // Tools
     function colorCodeWord(w) { return w.split('').map(c => /[aeiou]/i.test(c) ? `<span class="vowel">${c}</span>` : (/[a-z]/i.test(c)?`<span class="consonant">${c}</span>`:c)).join(''); }
     function toggleSyllable() { isSyllableShown = !isSyllableShown; document.getElementById('syl-display').innerText = isSyllableShown ? currentLevelWords[currentIndex].s.join(' • ') : ''; }
     function nextWord() {
@@ -369,7 +380,7 @@ advice=ad-vice=建議=My teacher gave me good advice.
         } catch(e) { console.error(e); }
     }
 
-    // Block Game (回歸標準 click 事件 + CSS touch-action)
+    // Logic: Block
     function initBlockGame(word) {
         let chars = word.split('').map((c,i)=>({c,i})).filter(x=>x.c!==' ');
         for(let i=chars.length-1; i>0; i--) { const j=Math.floor(Math.random()*(i+1)); [chars[i],chars[j]]=[chars[j],chars[i]]; }
@@ -385,7 +396,7 @@ advice=ad-vice=建議=My teacher gave me good advice.
                     let s = document.getElementById(`slot-${idx}`); 
                     s.innerText = item.c; 
                     s.classList.add('filled');
-                    btn.disabled = true; // 簡單明瞭
+                    btn.disabled = true;
                     checkBlock(word);
                 }
             };
