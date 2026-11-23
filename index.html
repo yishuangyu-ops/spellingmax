@@ -166,7 +166,7 @@
     // ==========================================
     // ⚠️ 老師請注意：把您的 Google 試算表 CSV 網址貼在下方的雙引號中
     // ==========================================
-    const SHEET_CSV_URL = "請把你的 Google 表單 CSV 網址貼在這裡";
+    const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1ifckMlnSUgNw-ltXGxpvcRA_Ga2eZGoOYijBmdOdqZ4/edit?gid=0#gid=0";
     
     const fallbackData = `
 # 雲端連線教學
@@ -234,4 +234,528 @@ success=suc-cess=成功=We achieved great success.=suc(下面) + cess(走)
             
             if (!line.includes('=')) {
                 if (line.includes('#')) {
-                    currentUnitName = line.split('#')[1].replace
+                    currentUnitName = line.split('#')[1].replace(/["',]/g, '').trim();
+                }
+                return;
+            }
+
+            if(line.startsWith('"') && line.endsWith('"')) {
+                line = line.substring(1, line.length - 1);
+                line = line.replace(/""/g, '"');
+            }
+
+            const parts = line.split('=');
+            if(parts.length >= 2) {
+                const w = parts[0].replace(/^["'\s]+/, '').trim();
+                const s = parts[1] ? parts[1].trim().split('-') : [w];
+                const m = parts[2] ? parts[2].trim() : "";
+                const sent = parts[3] ? parts[3].trim() : ""; 
+                const root = parts[4] ? parts[4].trim() : ""; 
+                
+                // 解析第 6 欄：動詞三態 (選填，支援逗號或減號分隔)
+                let forms = null;
+                const rawForms = parts[5] ? parts[5].replace(/["']+$/g, '').trim() : "";
+                if (rawForms && rawForms !== "無") {
+                    let fParts = rawForms.split(/[,，]/).map(x => x.trim()).filter(Boolean);
+                    if (fParts.length < 2) {
+                        fParts = rawForms.split('-').map(x => x.trim()).filter(Boolean);
+                    }
+                    if (fParts.length === 3) {
+                        forms = fParts;
+                    } else if (fParts.length === 2) {
+                        forms = [w, fParts[0], fParts[1]];
+                    }
+                }
+                
+                allWords.push({ w: w, s: s, m: m, sent: sent, root: root, forms: forms, unit: currentUnitName });
+            }
+        });
+        
+        initLevels();
+        if(document.getElementById('levelSelect').options.length > 0) {
+            loadLevel(document.getElementById('levelSelect').options[0].value); 
+        } else {
+            document.getElementById('game-area').innerHTML = "無資料";
+        }
+    }
+
+    // 根據目前模式回傳對應題庫（三態模式只篩選有填三態的動詞）
+    function getActiveWords() {
+        if (currentMode === 'forms') {
+            return currentLevelWords.filter(item => item.forms && item.forms.length === 3);
+        }
+        return currentLevelWords;
+    }
+
+    function recordMistake(word) {
+        let m = JSON.parse(localStorage.getItem(MISTAKE_KEY)) || [];
+        if(!m.includes(word)) { 
+            m.push(word); 
+            localStorage.setItem(MISTAKE_KEY, JSON.stringify(m)); 
+            updateMistakeCount(); 
+        }
+    }
+
+    function removeMistake(word) {
+        let m = JSON.parse(localStorage.getItem(MISTAKE_KEY)) || [];
+        if(m.includes(word)) {
+            m = m.filter(w => w !== word);
+            localStorage.setItem(MISTAKE_KEY, JSON.stringify(m));
+            updateMistakeCount();
+        }
+    }
+
+    function updateMistakeCount() {
+        let m = JSON.parse(localStorage.getItem(MISTAKE_KEY)) || [];
+        let btn = document.getElementById('mistake-btn');
+        if(btn) btn.innerText = `🏥 錯題本 (${m.length})`;
+    }
+
+    function loadMistakes() {
+        let m = JSON.parse(localStorage.getItem(MISTAKE_KEY)) || [];
+        if(m.length === 0) {
+            alert("太棒了！你目前沒有任何錯題喔！🎉");
+            return;
+        }
+        currentLevelWords = allWords.filter(item => m.includes(item.w));
+        if(currentLevelWords.length === 0) {
+            localStorage.setItem(MISTAKE_KEY, JSON.stringify([]));
+            updateMistakeCount();
+            alert("錯題本裡的單字已從雲端題庫中移除了。");
+            return;
+        }
+        
+        document.getElementById('levelSelect').value = 'mistakes';
+        currentIndex = 0;
+        isSyllableShown = false;
+        renderGame();
+    }
+
+    function changeLevel() { loadLevel(document.getElementById('levelSelect').value); }
+
+    function switchMode(mode) {
+        const prevMode = currentMode;
+        currentMode = mode;
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(`tab-${mode}`).classList.add('active');
+        isSyllableShown = false;
+        if (prevMode === 'forms' || mode === 'forms') {
+            currentIndex = 0;
+        }
+        renderGame();
+    }
+
+    function initLevels() {
+        const select = document.getElementById('levelSelect');
+        select.innerHTML = '';
+        if(allWords.length === 0) return;
+        
+        const units = [...new Set(allWords.map(word => word.unit))];
+
+        units.forEach(unit => {
+            let opt = document.createElement('option'); 
+            opt.value = unit;
+            opt.text = unit;
+            select.appendChild(opt);
+        });
+
+        let allOpt = document.createElement('option'); allOpt.value = 'all'; allOpt.text = '📚 全部單字 (All)';
+        select.appendChild(allOpt);
+
+        let misOpt = document.createElement('option'); misOpt.value = 'mistakes'; misOpt.text = '🏥 錯題特訓';
+        select.appendChild(misOpt);
+    }
+
+    function loadLevel(val) {
+        if(val === 'mistakes') {
+            loadMistakes();
+            return; 
+        }
+
+        if(val === 'all') {
+            currentLevelWords = [...allWords];
+        } else {
+            currentLevelWords = allWords.filter(w => w.unit === val);
+        }
+        
+        currentIndex = 0;
+        isSyllableShown = false;
+        renderGame();
+    }
+
+    // 將例句中的目標單字（及動詞三態）以底線隱藏
+    function maskSentence(sentence, data) {
+        if (!sentence || !data) return sentence;
+        let targets = [data.w];
+        if (data.forms) {
+            data.forms.forEach(f => {
+                f.split('/').forEach(v => targets.push(v.trim()));
+            });
+        }
+        let result = sentence;
+        targets.forEach(word => {
+            if (!word) return;
+            const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`\\b${escapedWord}\\b`, 'gi');
+            result = result.replace(regex, '______');
+        });
+        return result;
+    }
+
+    function renderGame() {
+        const container = document.getElementById('game-area');
+        const activeWords = getActiveWords();
+        const data = activeWords[currentIndex];
+        
+        if (currentMode === 'forms' && activeWords.length === 0) {
+            container.innerHTML = `
+                <div style="padding:30px; color:#78909C; font-size:1.1rem; line-height:1.8;">
+                    <div style="font-size:2.5rem; margin-bottom:10px;">🔄</div>
+                    這個單元目前沒有設定「動詞三態」喔！<br>
+                    <span style="font-size:0.9rem; color:#90A4AE;">請切換其他單元，或在試算表第 6 欄填入三態（例：<code>=eat, ate, eaten</code>）。</span>
+                </div>`;
+            return;
+        }
+
+        if(!data && document.getElementById('levelSelect').value === 'mistakes') {
+            container.innerHTML = `<div style="padding:40px; color:var(--success); font-size:1.5rem; font-weight:bold;">太厲害了！錯題全部消滅啦！🎉</div>`;
+            return;
+        }
+
+        if(!data) { container.innerHTML = "單元內無資料"; return; }
+
+        let html = `<div class="progress-indicator">${currentIndex+1} / ${activeWords.length}</div>`;
+
+        let displaySent = (currentMode === 'study') ? data.sent : maskSentence(data.sent, data);
+        let sentHtml = data.sent ? 
+            `<div class="sentence-tag noselect" onclick="speakSentence(this)">
+                <span>🔊 ${displaySent}</span>
+            </div>` : '';
+
+        let formsHtml = '';
+        if (currentMode === 'study' && data.forms) {
+            formsHtml = `
+                <div class="forms-tag noselect" onclick="speakForms()">
+                    <span>🔄 動詞三態：${data.forms.join(' - ')} 🔊</span>
+                </div>
+            `;
+        }
+
+        let rootHtml = '';
+        if(currentMode === 'study' && data.root && data.root !== "無") {
+            rootHtml = `
+                <button class="root-btn" onclick="toggleRoot()">🌱 查看字根 (Root)</button>
+                <div id="root-display" class="root-tag">${data.root}</div>
+            `;
+        }
+
+        let hintHtml = `
+            <div class="hint-section noselect">
+                <button class="hint-btn" onclick="toggleAnswer()">💡 偷看答案</button>
+                <div id="answer-reveal" class="answer-reveal"></div>
+            </div>
+        `;
+
+        if (currentMode === 'study') {
+            html += `<div class="feedback" id="feedback-msg"></div>`;
+            html += `<div class="syllable-display" id="syl-display">${isSyllableShown ? data.s.join(' • ') : ''}</div>`;
+            html += `<div class="big-word noselect" onclick="speakWord()">${colorCodeWord(data.w)}</div>`;
+            html += `<div class="chinese">${data.m}</div>`;
+            html += formsHtml;
+            html += rootHtml;
+            html += sentHtml;
+            html += `<div class="nav-controls noselect">
+                <button class="action-btn" onclick="toggleSyllable()" style="background:#90A4AE; box-shadow:0 4px 0 #607D8B;">拆解</button>
+                <button class="speak-btn" onclick="speakWord()">🔊</button>
+                <button class="action-btn" onclick="nextWord()">下一字 ➡</button>
+            </div>`;
+        } else if (currentMode === 'block') {
+            html += `<div class="feedback" id="feedback-msg">拼圖練習</div>`;
+            html += `<div class="chinese">${data.m}</div>`;
+            html += `<div class="letter-slots" id="slots-area">`;
+            for(let i=0; i<data.w.length; i++) html += data.w[i] === ' ' ? `<div class="slot space"> </div>` : `<div class="slot" id="slot-${i}"></div>`;
+            html += `</div>`;
+            html += `<div class="scramble-area noselect" id="block-btns"></div>`;
+            html += hintHtml;
+            html += sentHtml;
+            html += `<div class="nav-controls noselect">
+                <button class="action-btn btn-undo" onclick="undoBlock()">⌫ 倒退</button>
+                <button class="action-btn btn-reset" onclick="renderGame()">重置 ↺</button>
+                <button class="speak-btn" onclick="speakWord()">🔊</button>
+                <button class="action-btn" onclick="nextWord()">跳過 ➡</button>
+            </div>`;
+            setTimeout(() => initBlockGame(data.w), 0);
+        } else if (currentMode === 'dictation') {
+            html += `<div class="feedback" id="feedback-msg">聽寫練習</div>`;
+            html += `<div class="chinese">${data.m}</div>`;
+            html += `<input type="text" class="input-box" id="dict-input" autocomplete="off" placeholder="輸入答案" onkeypress="handleEnter(event)">`;
+            html += hintHtml;
+            html += sentHtml;
+            html += `<div class="nav-controls noselect">
+                <button class="action-btn" onclick="checkDictation()">檢查 ✅</button>
+                <button class="speak-btn" onclick="speakWord()">🔊</button>
+                <button class="action-btn" onclick="nextWord()">跳過 ➡</button>
+            </div>`;
+        } else if (currentMode === 'forms') {
+            html += `<div class="feedback" id="feedback-msg">動詞三態特訓</div>`;
+            html += `<div class="big-word noselect" style="margin:8px 0; font-size:2.6rem;" onclick="speakWord()">${data.forms[0]}</div>`;
+            html += `<div class="chinese" style="margin-top:0;">${data.m}</div>`;
+            html += `
+                <div class="forms-quiz-group">
+                    <div class="forms-input-row">
+                        <label class="forms-label" for="v2-input">過去式 (Past Tense)</label>
+                        <input type="text" class="forms-input" id="v2-input" autocomplete="off" autocapitalize="none" placeholder="輸入過去式" onkeydown="handleFormsKey(event, 'v2')">
+                    </div>
+                    <div class="forms-input-row">
+                        <label class="forms-label" for="v3-input">過去分詞 (Past Participle)</label>
+                        <input type="text" class="forms-input" id="v3-input" autocomplete="off" autocapitalize="none" placeholder="輸入過去分詞" onkeydown="handleFormsKey(event, 'v3')">
+                    </div>
+                </div>
+            `;
+            html += hintHtml;
+            html += `<div class="nav-controls noselect">
+                <button class="action-btn" onclick="checkForms()">檢查 ✅</button>
+                <button class="speak-btn" onclick="speakWord()">🔊</button>
+                <button class="action-btn" onclick="nextWord()">跳過 ➡</button>
+            </div>`;
+        }
+
+        container.innerHTML = html;
+        if(currentMode === 'dictation' || currentMode === 'block') setTimeout(speakWord, 600);
+        if(currentMode === 'forms') {
+            setTimeout(() => {
+                speakWord();
+                const v2 = document.getElementById('v2-input');
+                if(v2) v2.focus();
+            }, 300);
+        }
+    }
+
+    function colorCodeWord(w) { return w.split('').map(c => /[aeiou]/i.test(c) ? `<span class="vowel">${c}</span>` : (/[a-z]/i.test(c)?`<span class="consonant">${c}</span>`:c)).join(''); }
+    
+    function toggleSyllable() { 
+        const data = getActiveWords()[currentIndex];
+        if (!data) return;
+        isSyllableShown = !isSyllableShown; 
+        document.getElementById('syl-display').innerText = isSyllableShown ? data.s.join(' • ') : ''; 
+    }
+    
+    function toggleRoot() { 
+        const el = document.getElementById('root-display'); 
+        if(el) el.style.display = (el.style.display === 'block' ? 'none' : 'block'); 
+    }
+    
+    function toggleAnswer() {
+        const el = document.getElementById('answer-reveal');
+        const data = getActiveWords()[currentIndex];
+        if(!el || !data) return;
+        const ansText = (currentMode === 'forms' && data.forms) ? data.forms.join(' - ') : data.w;
+        el.innerText = (el.innerText === "") ? ansText : "";
+    }
+    
+    function nextWord() {
+        const activeWords = getActiveWords();
+        if (currentIndex < activeWords.length - 1) { currentIndex++; renderGame(); }
+        else { 
+            if(document.getElementById('levelSelect').value === 'mistakes') {
+                alert("特訓結束！我們重新檢查錯題本。");
+                loadMistakes(); 
+            } else {
+                if(confirm("單元完成！重來一次？")) { currentIndex=0; renderGame(); } 
+            }
+        }
+    }
+    
+    function initVoices() {
+        const s = document.getElementById('voiceSelect');
+        function load() {
+            let vs = synth.getVoices();
+            if(vs.length===0) return;
+            s.innerHTML = '';
+            vs.forEach((v,i) => {
+                let opt = document.createElement('option'); opt.value = i;
+                opt.text = `${v.name.substring(0,20)} (${v.lang})`;
+                s.appendChild(opt);
+                if(v.lang==='en-US' && v.name.includes('Google')) s.selectedIndex = i;
+            });
+            currentVoice = vs[s.selectedIndex];
+        }
+        load();
+        if(speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = load;
+    }
+    function setVoice() { currentVoice = synth.getVoices()[document.getElementById('voiceSelect').value]; }
+    
+    function speakText(text, rate, onend) {
+        try {
+            synth.cancel(); if(!currentVoice) initVoices();
+            setTimeout(() => {
+                const u = new SpeechSynthesisUtterance(text);
+                if(currentVoice) u.voice = currentVoice;
+                u.rate = rate || 0.85;
+                if(onend) u.onend = onend;
+                synth.speak(u);
+            }, 100);
+        } catch(e) {}
+    }
+
+    function speakWord() {
+        const data = getActiveWords()[currentIndex];
+        if (!data) return;
+        const target = (currentMode === 'forms' && data.forms) ? data.forms[0] : data.w;
+        speakText(target, 0.85);
+    }
+
+    function speakForms() {
+        const data = getActiveWords()[currentIndex];
+        if (!data || !data.forms) return;
+        const textToRead = data.forms.map(f => f.split('/')[0].trim()).join(', ');
+        speakText(textToRead, 0.8);
+    }
+
+    function speakSentence(el) {
+        const data = getActiveWords()[currentIndex];
+        if (!data || !data.sent) return;
+        if(el) el.classList.add('playing');
+        speakText(data.sent, 0.9, () => { if(el) el.classList.remove('playing'); });
+    }
+
+    function initBlockGame(word) {
+        blockHistory = [];
+        let chars = word.split('').map((c,i)=>({c,i})).filter(x=>x.c!==' ');
+        for(let i=chars.length-1; i>0; i--) { const j=Math.floor(Math.random()*(i+1)); [chars[i],chars[j]]=[chars[j],chars[i]]; }
+        const area = document.getElementById('block-btns');
+        chars.forEach(item => {
+            let btn = document.createElement('button'); btn.className = 'block-btn noselect'; btn.innerText = item.c;
+            btn.onclick = () => {
+                let idx = -1;
+                for(let k=0; k<word.length; k++) {
+                    if(!document.getElementById(`slot-${k}`)?.innerText && word[k]!==' ') { idx=k; break; }
+                }
+                if(idx !== -1) {
+                    let s = document.getElementById(`slot-${idx}`); s.innerText = item.c; s.classList.add('filled');
+                    btn.disabled = true;
+                    blockHistory.push({ slotId: `slot-${idx}`, btn: btn });
+                    checkBlock(word);
+                }
+            };
+            area.appendChild(btn);
+        });
+    }
+
+    function undoBlock() {
+        if (blockHistory.length === 0) return;
+        const last = blockHistory.pop();
+        const slot = document.getElementById(last.slotId);
+        if (slot) {
+            slot.innerText = '';
+            slot.classList.remove('filled');
+        }
+        if (last.btn) {
+            last.btn.disabled = false;
+        }
+        const m = document.getElementById('feedback-msg');
+        if (m) m.innerText = '拼圖練習';
+    }
+
+    function checkBlock(target) {
+        let cur = '';
+        for(let i=0; i<target.length; i++) cur += target[i]===' '?' ':document.getElementById(`slot-${i}`).innerText;
+        if(cur.length === target.length) {
+            if(cur.toLowerCase()===target.toLowerCase()) feedback(true);
+            else feedback(false);
+        }
+    }
+    
+    function checkDictation() {
+        const data = getActiveWords()[currentIndex];
+        if (!data) return;
+        const ans = document.getElementById('dict-input').value.trim().toLowerCase();
+        const tgt = data.w.toLowerCase();
+        if(ans===tgt) feedback(true); else feedback(false);
+    }
+    function handleEnter(e) { if(e.key==='Enter') checkDictation(); }
+
+    // 動詞三態測驗操作與檢查
+    function handleFormsKey(e, field) {
+        if (e.key === 'Enter') {
+            if (field === 'v2') {
+                const v3 = document.getElementById('v3-input');
+                if (v3) v3.focus();
+            } else {
+                checkForms();
+            }
+        }
+    }
+
+    function isMatchForm(userInput, targetForm) {
+        const ans = userInput.trim().toLowerCase();
+        if (!ans) return false;
+        const accepted = targetForm.split('/').map(x => x.trim().toLowerCase());
+        return accepted.includes(ans);
+    }
+
+    function checkForms() {
+        const data = getActiveWords()[currentIndex];
+        if (!data || !data.forms) return;
+
+        const v2El = document.getElementById('v2-input');
+        const v3El = document.getElementById('v3-input');
+        const v2Ok = isMatchForm(v2El.value, data.forms[1]);
+        const v3Ok = isMatchForm(v3El.value, data.forms[2]);
+
+        [ { el: v2El, ok: v2Ok }, { el: v3El, ok: v3Ok } ].forEach(item => {
+            if (item.ok) {
+                item.el.style.borderColor = "var(--success)";
+                item.el.style.background = "#E8F5E9";
+            } else {
+                item.el.style.borderColor = "var(--error)";
+                item.el.style.background = "#FFEBEE";
+                item.el.classList.add('anim-shake');
+                setTimeout(() => item.el.classList.remove('anim-shake'), 500);
+            }
+        });
+
+        if (v2Ok && v3Ok) {
+            speakForms(); // 答對時順便唸一次完整三態加深印象
+            feedback(true, 1800);
+        } else {
+            feedback(false);
+        }
+    }
+
+    function feedback(correct, delay = 1200) {
+        const m = document.getElementById('feedback-msg');
+        const inp = document.getElementById('dict-input');
+        const data = getActiveWords()[currentIndex];
+        if (!data) return;
+        const currentWord = data.w; 
+
+        if(correct) {
+            removeMistake(currentWord); 
+            m.innerHTML = "<span class='anim-pop' style='color:var(--success)'>Correct! 🎉</span>";
+            if(inp) { inp.style.borderColor = "var(--success)"; inp.style.background="#E8F5E9"; }
+            safePlaySound(true); setTimeout(nextWord, delay);
+        } else {
+            recordMistake(currentWord); 
+            m.innerHTML = "<span class='anim-shake' style='color:var(--error)'>Try Again 😅</span>";
+            if(inp) { inp.classList.add('anim-shake'); inp.style.borderColor = "var(--error)"; inp.style.background="#FFEBEE"; setTimeout(()=>inp.classList.remove('anim-shake'),500); }
+            safePlaySound(false);
+        }
+    }
+    
+    function safePlaySound(good) {
+        try {
+            const ctx = new (window.AudioContext||window.webkitAudioContext)();
+            const o = ctx.createOscillator(); const g = ctx.createGain();
+            o.connect(g); g.connect(ctx.destination);
+            o.type = good?'sine':'triangle';
+            o.frequency.setValueAtTime(good?600:150, ctx.currentTime);
+            if(good) o.frequency.exponentialRampToValueAtTime(900, ctx.currentTime+0.1);
+            else o.frequency.linearRampToValueAtTime(100, ctx.currentTime+0.2);
+            g.gain.setValueAtTime(0.1, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime+(good?0.5:0.3));
+            o.start(); o.stop(ctx.currentTime+(good?0.5:0.3));
+        } catch(e) {}
+    }
+</script>
+</body>
+</html>
